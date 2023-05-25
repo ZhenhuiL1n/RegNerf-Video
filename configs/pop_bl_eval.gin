@@ -1,0 +1,15 @@
+Config.data_dir = "/media/pleasework/Storage/regnerf/data"
+Config.checkpoint_dir = "out/pop"
+Config.dataset_loader = 'blender'
+Config.white_background = True
+Config.factor = 1
+Config.render_factor = 1
+Config.near = 2
+Config.far = 6
+MipNerfModel.ray_shape = 'cylinder'
+MLP.density_noise = 1.
+
+Config.n_input_views = 8
+
+# For BL
+Config.load_random_rays = False

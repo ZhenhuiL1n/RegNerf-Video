@@ -1,0 +1,37 @@
+Config.data_dir = "/home/pleasework/Desktop/Neural-motion-capture/regnerf/data/Knight-sparse"
+Config.checkpoint_dir = "out/knight"
+Config.dataset_loader = 'multicam'
+Config.batching = 'single_image'
+Config.white_background = False
+Config.checkpoint_every = 3000
+
+Config.factor = 0
+
+Config.near = 2
+Config.far = 6
+
+
+MLP.density_noise = 1.
+
+Config.n_input_views = 8
+Config.max_steps = 60000
+
+
+Config.lr_init = 0.002
+Config.lr_final = 0.00002
+Config.lr_delay_steps = 512
+Config.lr_delay_mult = 0.01
+Config.grad_max_norm = 0.1
+Config.grad_max_val = 0.1
+
+Config.anneal_nearfar = True
+Config.anneal_nearfar_steps = 512
+Config.anneal_nearfar_perc = 0.0001
+Config.anneal_mid_perc = 1.0
+
+
+Config.flow_loss_mult = 0
+
+# adjustment
+Config.load_random_rays = True
+Config.depth_tvnorm_decay = True

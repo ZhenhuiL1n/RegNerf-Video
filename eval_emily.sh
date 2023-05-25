@@ -1,0 +1,1 @@
+python eval.py --gin_configs configs/multicam_emily.gin

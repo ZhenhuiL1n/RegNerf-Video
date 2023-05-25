@@ -1,0 +1,1 @@
+python eval.py --gin_configs configs/llff_bl.gin
