@@ -52,8 +52,9 @@ class Config:
   # new added configs to support the video configuration:
   
   video_dir: str = '/media/pleasework/Storage/Nerf_Datasets/Datasets/surrey/02_dancer'
-  start_frame: int = 0
-  end_frame: int = 20
+  start_frame: int = 100
+  end_frame: int =150
+  render_frame: int = 50
 
   # end of the new added configs to support the video configuration.
 

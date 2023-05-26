@@ -35,5 +35,5 @@ Config.anneal_mid_perc = 1.0
 Config.flow_loss_mult = 0
 
 # adjustment
-Config.load_random_rays = True
+Config.load_random_rays = False
 Config.depth_tvnorm_decay = True
