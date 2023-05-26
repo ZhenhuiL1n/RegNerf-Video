@@ -51,10 +51,9 @@ class Config:
   # new added configs to support the video configuration:
   
   video_dir: str = '/media/pleasework/Storage/Nerf_Datasets/Datasets/surrey/02_dancer'
-  start_frame: int = 0
-  end_frame: int = 20
-  render_frame: int = 0
-
+  start_frame: int = 100
+  end_frame: int =120
+  render_frame: int = 20
   # end of the new added configs to support the video configuration.
 
   dataset_loader: str = 'dtu'  # The type of dataset loader to use.

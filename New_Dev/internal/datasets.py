@@ -334,6 +334,7 @@ def anneal_nearfar(d, it, near_final, far_final,
       rays_out = utils.Rays(
           origins=v.origins, directions=v.directions,
           viewdirs=v.viewdirs, radii=v.radii,
+          times = v.times,
           lossmult=v.lossmult, near=ones*near_i, far=ones*far_i)
       out_dict[k] = rays_out
     else:
@@ -1216,6 +1217,7 @@ class Multicam_video(Dataset):
       print("image all len and  shapes:", len(img_all), img_all[0].shape)
 
       self.images = img_all[0]
+      
       print("self image shape: ",self.images.shape)
       self.n_examples = len(self.images)
 
@@ -1234,7 +1236,7 @@ class Multicam_video(Dataset):
 
       # now we need to construct the time idx tensor for the model:
       self.time_idx = np.arange(self.time_frame_num)
-      print("self.time_idx:", self.time_idx)
+      # print("self.time_idx:", self.time_idx)
       self.time_idx = np.tile(self.time_idx, (cam_num, 1)).transpose()
       np.savetxt(os.path.join(self.checkpointdir, 'time_idx.txt'), self.time_idx, fmt='%d')
       # print("self.time_idx:", self.time_idx)
@@ -1243,7 +1245,7 @@ class Multicam_video(Dataset):
       # but note that the time series will go through the mlp for predicting the color and density
       # thi should also be addressed
 
-
+ 
 
       #To do, zhenhuilin, after the travel:
 
@@ -1259,8 +1261,8 @@ class Multicam_video(Dataset):
     self._generate_rays(config)
     # self._generate_downsampled_rays(config)
 
-    if self.load_random_rays:
-      self._generate_random_rays(config)
+    # if self.load_random_rays:
+    #   self._generate_random_rays(config)
     # if self.load_random_fullimage_rays:
     #   self._generate_random_fullimage_rays(config)
     #   self._load_renderings_featloss(config)
@@ -1278,6 +1280,10 @@ class Multicam_video(Dataset):
       if config.batching == 'all_images':
         # If global batching, also concatenate all data into one list
         x = np.concatenate(x, axis=0)
+        
+      print('x shape after flatten/concatenate:', \
+            x[0].shape, "length:", len(x))
+        
       return x
     
     # self.images = np.stack(self.images, axis=0)
@@ -1308,6 +1314,7 @@ class Multicam_video(Dataset):
     width = self.meta['width']
     height = self.meta['height']
     self.resolutions = width * height
+    
 
     def res2grid(w, h):
       return np.meshgrid(  # pylint: disable=unbalanced-tuple-unpacking
@@ -1322,19 +1329,36 @@ class Multicam_video(Dataset):
 
     camera_dirs = [v @ p2c[:3, :3].T for v, p2c in zip(pixel_dirs, pix2cam)]
     camera_dirs = np.stack(camera_dirs, axis=0)
-
+    
+    # copy camera_dirs 8 time and concat them together:
+    camera_dirs = np.tile(camera_dirs, (self.render_frame, 1, 1, 1))
+    
+    print("camera_dirs shape after tile:",camera_dirs.shape)
+    
+    
+    # directions ......
     directions = [v @ c2w[:3, :3].T for v, c2w in zip(camera_dirs, cam2world)]
     directions = [-d[:, ::-1] for d in directions]
     directions = np.stack(directions, axis=0)
+    directions = np.tile(directions, (self.render_frame, 1, 1, 1))
+    
+    
+    # origins ...... 
     origins = [
         np.broadcast_to(c2w[:3, -1], v.shape)
         for v, c2w in zip(directions, cam2world)
     ]
     origins = np.stack(origins, axis=0)
+    origins = np.tile(origins, (self.render_frame, 1, 1, 1))
+    
+    
+    # viewdirs.......
     viewdirs = [
         v / np.linalg.norm(v, axis=-1, keepdims=True) for v in directions
     ]
     viewdirs = np.stack(viewdirs,axis=0)
+    print("viewdirs shape:",viewdirs.shape)
+    viewdirs = np.tile(viewdirs, (self.render_frame, 1, 1, 1))
 
     def broadcast_scalar_attribute(x):
       return [
@@ -1342,11 +1366,27 @@ class Multicam_video(Dataset):
           for i in range(self.n_examples)
       ]
 
-    lossmult = broadcast_scalar_attribute(self.meta['lossmult'])
+
+
+    # lossmult, near, far and onesss...
+    # lossmult = broadcast_scalar_attribute(self.meta['lossmult'])
     near = broadcast_scalar_attribute(self.meta['near'])
     far = broadcast_scalar_attribute(self.meta['far'])
-    ones = np.ones_like(origins[Ellipsis, :1])
+    ones = np.ones_like(origins[Ellipsis, :1])    
     print("ones.shape:", ones.shape)
+    
+    
+    # times..............
+    times = np.ones_like(origins[Ellipsis, :1])   
+    print("times.example:", times[1,:,:,0])
+    for i in range(self.render_frame):
+      times[i*20:(i+1)*20,:,:,:] = times[i*20:(i+1)*20,:,:,:]*(i+1)
+      print("times.example:", times[1,:,:,0])
+        
+    print("times shape:", times.shape)
+    np.savetxt("/media/pleasework/Storage/regnerf/New_Dev/out/times1.txt", times[10,:,:,0])
+    np.savetxt("/media/pleasework/Storage/regnerf/New_Dev/out/times2.txt", times[30,:,:,0])
+    
     self.near = config.near
     self.far = config.far
     # Distance from each unit-norm direction vector to its x-axis neighbor.
@@ -1358,6 +1398,7 @@ class Multicam_video(Dataset):
     # halfway between inscribed by / circumscribed about the pixel.
     radii = [v[Ellipsis, None] * 2 / np.sqrt(12) for v in dx]
     radii = np.stack(radii,axis=0)
+    print("radii shape:", radii.shape)
 
 
     # those origins, directions, viewdirs, radii, lossmult, near, far should be idx independent for
@@ -1369,6 +1410,7 @@ class Multicam_video(Dataset):
         viewdirs=viewdirs,
         radii=radii,
         lossmult=ones,
+        times=times,
         near=ones * self.near,
         far=ones * self.far)
     
@@ -1377,103 +1419,94 @@ class Multicam_video(Dataset):
     self.bounds = np.stack([near, far], axis=-1)
     
 
-  def _generate_random_poses(self, config):
-    """Generates random poses."""
-    n_poses = config.n_random_poses
-    cam2world = self.meta['cam2world']
-    # print(cam2world)
-    poses = np.stack(cam2world)
-    # print("pose shape:",poses.shape)
-    bounds = self.bounds
+  # def _generate_random_poses(self, config):
+  #   """Generates random poses."""
+  #   n_poses = config.n_random_poses
+  #   cam2world = self.meta['cam2world']
+  #   # print(cam2world)
+  #   poses = np.stack(cam2world)
+  #   # print("pose shape:",poses.shape)
+  #   bounds = self.bounds
 
-    # Find a reasonable 'focus depth' for this dataset as a weighted average
-    # of near and far bounds in disparity space.
-    close_depth, inf_depth = bounds.min() * .9, bounds.max() * 5.
-    dt = .75
-    focal = 1 / (((1 - dt) / close_depth + dt / inf_depth))
+  #   # Find a reasonable 'focus depth' for this dataset as a weighted average
+  #   # of near and far bounds in disparity space.
+  #   close_depth, inf_depth = bounds.min() * .9, bounds.max() * 5.
+  #   dt = .75
+  #   focal = 1 / (((1 - dt) / close_depth + dt / inf_depth))
 
-    # Get radii for spiral path using 90th percentile of camera positions.
-    positions = poses[:, :3, 3]
-    # print(positions)
-    radii = np.percentile(np.abs(positions), 100, 0)
-    # print(radii)
+  #   # Get radii for spiral path using 90th percentile of camera positions.
+  #   positions = poses[:, :3, 3]
+  #   # print(positions)
+  #   radii = np.percentile(np.abs(positions), 100, 0)
+  #   # print(radii)
 
-    radii = np.concatenate([radii, [1.]])
+  #   radii = np.concatenate([radii, [1.]])
 
-    # Generate random poses.
-    random_poses = []
-    cam2world = poses_avg(poses)
-    up = poses[:, :3, 1].mean(0)
-    for _ in range(n_poses):
-      t = radii * np.concatenate([2 * np.random.rand(3) - 1., [1,]])
-      position = cam2world @ t
-      lookat = cam2world @ [0, 0, -focal, 1.]
-      z_axis = position - lookat
+  #   # Generate random poses.
+  #   random_poses = []
+  #   cam2world = poses_avg(poses)
+  #   up = poses[:, :3, 1].mean(0)
+  #   for _ in range(n_poses):
+  #     t = radii * np.concatenate([2 * np.random.rand(3) - 1., [1,]])
+  #     position = cam2world @ t
+  #     lookat = cam2world @ [0, 0, -focal, 1.]
+  #     z_axis = position - lookat
     
-    random_poses.append(viewmatrix(z_axis, up, position))
-    self.random_poses = np.stack(random_poses, axis=0)
+  #   random_poses.append(viewmatrix(z_axis, up, position))
+  #   self.random_poses = np.stack(random_poses, axis=0)
 
-  def _generate_random_rays(self, config):
-    """Generates random rays."""
-    self.n_examples = len(self.images)
-    self._generate_random_poses(config)
-    camtoworlds = self.random_poses
-    pix2cam = self.meta['pix2cam']
+  # def _generate_random_rays(self, config):
+  #   """Generates random rays."""
+  #   self.n_examples = len(self.images)
+  #   self._generate_random_poses(config)
+  #   camtoworlds = self.random_poses
+  #   pix2cam = self.meta['pix2cam']
 
-    width = self.meta['width']
-    height = self.meta['height']
-    self.resolutions = width * height
+  #   width = self.meta['width']
+  #   height = self.meta['height']
+  #   self.resolutions = width * height
 
-    def res2grid(w, h):
-      return np.meshgrid(  # pylint: disable=unbalanced-tuple-unpacking
-          np.arange(w, dtype=np.float32) + .5,  # X-Axis (columns)
-          np.arange(h, dtype=np.float32) + .5,  # Y-Axis (rows)
-          indexing='xy')
+  #   def res2grid(w, h):
+  #     return np.meshgrid(  # pylint: disable=unbalanced-tuple-unpacking
+  #         np.arange(w, dtype=np.float32) + .5,  # X-Axis (columns)
+  #         np.arange(h, dtype=np.float32) + .5,  # Y-Axis (rows)
+  #         indexing='xy')
 
-    xy = [res2grid(w, h) for w, h in zip(width, height)]
-    pixel_dirs = [np.stack([x, y, np.ones_like(x)], axis=-1) for x, y in xy]
+  #   xy = [res2grid(w, h) for w, h in zip(width, height)]
+  #   pixel_dirs = [np.stack([x, y, np.ones_like(x)], axis=-1) for x, y in xy]
 
-    # print("pixel_dirs shape:",pixel_dirs[0].shape, "pixcel_dir len:", len(pixel_dirs))
+  #   # print("pixel_dirs shape:",pixel_dirs[0].shape, "pixcel_dir len:", len(pixel_dirs))
 
-    camera_dirs = [v @ p2c[:3, :3].T for v, p2c in zip(pixel_dirs, pix2cam)]
-    camera_dirs = np.stack(camera_dirs, axis=0)
-    directions = ((camera_dirs[None, Ellipsis, None, :] *
-                     camtoworlds[:, None, None, :3, :3]).sum(axis=-1))
-    origins = np.broadcast_to(camtoworlds[:, None, None, :3, -1],
-                                directions.shape)
-    viewdirs = directions / np.linalg.norm(directions, axis=-1, keepdims=True)
+  #   camera_dirs = [v @ p2c[:3, :3].T for v, p2c in zip(pixel_dirs, pix2cam)]
+  #   camera_dirs = np.stack(camera_dirs, axis=0)
+  #   directions = ((camera_dirs[None, Ellipsis, None, :] *
+  #                    camtoworlds[:, None, None, :3, :3]).sum(axis=-1))
+  #   origins = np.broadcast_to(camtoworlds[:, None, None, :3, -1],
+  #                               directions.shape)
+  #   viewdirs = directions / np.linalg.norm(directions, axis=-1, keepdims=True)
 
-    # def broadcast_scalar_attribute(x):
-    #   return [
-    #       np.broadcast_to(x[i], origins[i][Ellipsis, :1].shape)
-    #       for i in range(self.n_examples)
-    #   ]
+  #   ones = np.ones_like(origins[Ellipsis, :1])
+  #   self.near = 2
+  #   self.far = 6
+  #   # Distance from each unit-norm direction vector to its x-axis neighbor.
+  #   dx = [
+  #       np.sqrt(np.sum((v[:-1, :, :] - v[1:, :, :])**2, -1)) for v in directions
+  #   ]
+  #   dx = [np.concatenate([v, v[-2:-1, :]], axis=0) for v in dx]
+  #   # Cut the distance in half, and then round it out so that it's
+  #   # halfway between inscribed by / circumscribed about the pixel.
+  #   radii = [v[Ellipsis, None] * 2 / np.sqrt(12) for v in dx]
+  #   radii = np.stack(radii,axis=0)
 
-    # lossmult = broadcast_scalar_attribute(self.meta['lossmult'])
-    # near = broadcast_scalar_attribute(self.meta['near'])
-    # far = broadcast_scalar_attribute(self.meta['far'])
-    ones = np.ones_like(origins[Ellipsis, :1])
-    self.near = 2
-    self.far = 6
-    # Distance from each unit-norm direction vector to its x-axis neighbor.
-    dx = [
-        np.sqrt(np.sum((v[:-1, :, :] - v[1:, :, :])**2, -1)) for v in directions
-    ]
-    dx = [np.concatenate([v, v[-2:-1, :]], axis=0) for v in dx]
-    # Cut the distance in half, and then round it out so that it's
-    # halfway between inscribed by / circumscribed about the pixel.
-    radii = [v[Ellipsis, None] * 2 / np.sqrt(12) for v in dx]
-    radii = np.stack(radii,axis=0)
-
-    self.random_rays = utils.Rays(
-        origins=origins[0],
-        directions=directions[0],
-        viewdirs=viewdirs[0],
-        radii=radii[0],
-        lossmult=ones[0],
-        near=ones[0] * self.near,
-        far=ones[0] * self.far)
-    self.random_rays = [self.random_rays] 
+  #   self.random_rays = utils.Rays(
+  #       origins=origins[0],
+  #       directions=directions[0],
+  #       viewdirs=viewdirs[0],
+  #       radii=radii[0],
+  #       lossmult=ones[0],
+  #       near=ones[0] * self.near,
+  #       far=ones[0] * self.far)
+  #   self.random_rays = [self.random_rays] 
 
 
 
