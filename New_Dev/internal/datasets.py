@@ -334,7 +334,6 @@ def anneal_nearfar(d, it, near_final, far_final,
       rays_out = utils.Rays(
           origins=v.origins, directions=v.directions,
           viewdirs=v.viewdirs, radii=v.radii,
-          times = v.times,
           lossmult=v.lossmult, near=ones*near_i, far=ones*far_i)
       out_dict[k] = rays_out
     else:
@@ -1213,19 +1212,14 @@ class Multicam_video(Dataset):
         images_per_frame = np.stack(img_temp, axis=0)
         # print("frame shape:", frame.shape, "img_temp len:", len(img_temp))
         img_all.append(images_per_frame)
-        
-      print("image all len and  shapes:", len(img_all), img_all[0].shape)
 
       self.images = img_all[0]
       
-      print("self image shape: ",self.images.shape)
       self.n_examples = len(self.images)
 
       # print("self.images final shape:", self.images.shape)
 
       # lets check if we just get one frame from each camera and try to train it, is ok???
-
-
 
       # write the self.meta into the out path for saving the meta data, check if it is correct
       # or not???? 
@@ -1281,9 +1275,6 @@ class Multicam_video(Dataset):
         # If global batching, also concatenate all data into one list
         x = np.concatenate(x, axis=0)
         
-      print('x shape after flatten/concatenate:', \
-            x[0].shape, "length:", len(x))
-        
       return x
     
     # self.images = np.stack(self.images, axis=0)
@@ -1333,9 +1324,8 @@ class Multicam_video(Dataset):
     # copy camera_dirs 8 time and concat them together:
     camera_dirs = np.tile(camera_dirs, (self.render_frame, 1, 1, 1))
     
-    print("camera_dirs shape after tile:",camera_dirs.shape)
-    
-    
+    # print("camera_dirs shape after tile:",camera_dirs.shape)
+     
     # directions ......
     directions = [v @ c2w[:3, :3].T for v, c2w in zip(camera_dirs, cam2world)]
     directions = [-d[:, ::-1] for d in directions]
@@ -1357,8 +1347,6 @@ class Multicam_video(Dataset):
         v / np.linalg.norm(v, axis=-1, keepdims=True) for v in directions
     ]
     viewdirs = np.stack(viewdirs,axis=0)
-    print("viewdirs shape:",viewdirs.shape)
-    viewdirs = np.tile(viewdirs, (self.render_frame, 1, 1, 1))
 
     def broadcast_scalar_attribute(x):
       return [
@@ -1367,25 +1355,23 @@ class Multicam_video(Dataset):
       ]
 
 
-
     # lossmult, near, far and onesss...
     # lossmult = broadcast_scalar_attribute(self.meta['lossmult'])
     near = broadcast_scalar_attribute(self.meta['near'])
     far = broadcast_scalar_attribute(self.meta['far'])
     ones = np.ones_like(origins[Ellipsis, :1])    
-    print("ones.shape:", ones.shape)
+    # print("ones.shape:", ones.shape)
     
     
     # times..............
     times = np.ones_like(origins[Ellipsis, :1])   
-    print("times.example:", times[1,:,:,0])
     for i in range(self.render_frame):
       times[i*20:(i+1)*20,:,:,:] = times[i*20:(i+1)*20,:,:,:]*(i+1)
-      print("times.example:", times[1,:,:,0])
-        
-    print("times shape:", times.shape)
-    np.savetxt("/media/pleasework/Storage/regnerf/New_Dev/out/times1.txt", times[10,:,:,0])
-    np.savetxt("/media/pleasework/Storage/regnerf/New_Dev/out/times2.txt", times[30,:,:,0])
+
+    
+    
+    # np.savetxt("/media/pleasework/Storage/regnerf/New_Dev/out/times1.txt", times[10,:,:,0])
+    # np.savetxt("/media/pleasework/Storage/regnerf/New_Dev/out/times2.txt", times[30,:,:,0])
     
     self.near = config.near
     self.far = config.far
@@ -1398,8 +1384,17 @@ class Multicam_video(Dataset):
     # halfway between inscribed by / circumscribed about the pixel.
     radii = [v[Ellipsis, None] * 2 / np.sqrt(12) for v in dx]
     radii = np.stack(radii,axis=0)
-    print("radii shape:", radii.shape)
-
+    
+    
+    # concatinate the origins with time in the last axis:
+    origins = np.concatenate((origins, times), axis=-1)
+    directions = np.concatenate((directions, times), axis=-1)
+    viewdirs = np.concatenate((viewdirs, times), axis=-1)
+    
+    print("origins shape:", origins.shape)
+    print("directions shape:", directions.shape)
+    print("viewdirs shape:", viewdirs.shape)
+    
 
     # those origins, directions, viewdirs, radii, lossmult, near, far should be idx independent for
     # every timeframe and also, idx, will check out later and add................
@@ -1410,7 +1405,6 @@ class Multicam_video(Dataset):
         viewdirs=viewdirs,
         radii=radii,
         lossmult=ones,
-        times=times,
         near=ones * self.near,
         far=ones * self.far)
     

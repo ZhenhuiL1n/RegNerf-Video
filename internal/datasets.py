@@ -371,9 +371,6 @@ class Dataset(threading.Thread):
                        and (not config.render_path))
     self.start_frame = config.start_frame
     self.end_frame = config.end_frame
-
-    print("The start and end frame of this video can be:", self.start_frame, self.end_frame)")
-
     
 
     self.split = split
@@ -626,6 +623,8 @@ class Dataset(threading.Thread):
     origins = np.broadcast_to(self.camtoworlds[:, None, None, :3, -1],
                               directions.shape)
     viewdirs = directions / np.linalg.norm(directions, axis=-1, keepdims=True)
+    
+    print("viewdirs shape:",viewdirs.shape)
 
     # Distance from each unit-norm direction vector to its x-axis neighbor.
     dx = np.sqrt(
@@ -948,6 +947,8 @@ class Multicam(Dataset):
     # halfway between inscribed by / circumscribed about the pixel.
     radii = [v[Ellipsis, None] * 2 / np.sqrt(12) for v in dx]
     radii = np.stack(radii,axis=0)
+    
+    print("viewdirs shape:",viewdirs.shape)
 
     self.rays = utils.Rays(
         origins=origins,

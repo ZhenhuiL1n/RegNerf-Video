@@ -36,7 +36,6 @@ class Rays:
   viewdirs: float
   radii: float
   lossmult: float
-  times: float
   near: float
   far: float
 

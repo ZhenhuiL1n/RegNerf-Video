@@ -343,6 +343,8 @@ def sample_along_rays(rng,
 
   means, covs = cast_rays(
       t_vals, origins, directions, radii, ray_shape, diag=diag)
+  
+  # contactinate the times here I
   return t_vals, (means, covs)
 
 
